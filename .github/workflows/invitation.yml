@@ -8,12 +8,31 @@ jobs:
     runs-on: ubuntu-latest
     if: contains(github.event.issue.title, 'invite') || contains(github.event.issue.title, 'הזמן')
     steps:
-      - name: Send Invite
-        uses: vj-abigo/invite-on-label@v1.4
+      - name: Send Organization Invite
+        uses: actions/github-script@v7
         with:
-          organization: 'https-mitmachim-top'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          comment: 'ברוך הבא לארגון מתמחים טופ! ההזמנה הרשמית נשלחה לחשבון שלך. יש לאשר אותה במייל או דרך עמוד הארגון בגיטהאב.'
-          teams: 'developers'
-        env:
-          INVITE_TOKEN: ${{ secrets.INVITE_TOKEN }}
+          github-token: \${{ secrets.INVITE_TOKEN }}
+          script: |
+            const issueOwner = context.payload.issue.user.login;
+            
+            // שליחת הזמנה לארגון
+            await github.rest.orgs.createInvitation({
+              org: 'https-mitmachim-top',
+              invitee_id: context.payload.issue.user.id,
+              role: 'direct_member'
+            });
+            
+            // כתיבת תגובה וסגירת ה-Issue אוטומטית
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `ברוך הבא לארגון מתמחים טופ @${issueOwner}! ההזמנה הרשמית נשלחה לחשבון שלך. יש לאשר אותה במייל או דרך עמוד הארגון בגיטהאב.`
+            });
+            
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              state: 'closed'
+            });
