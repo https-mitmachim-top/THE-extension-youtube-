@@ -1,0 +1,162 @@
+# YT Unlocked v2 – חוזה בין הרכיבים
+
+מסמך עבודה לבנייה במקביל. כל רכיב נוגע **רק בקבצים שלו**. שינוי בממשק משותף = לעדכן כאן.
+
+## מטרת v2
+
+1. הכל מ-v1 (חסימת פרסומות, ניגון ברקע, הורדה בדפדפן + מיזוג MP4, חלון צף, איכות מרבית, מהירויות).
+2. **ההורדה 100% בדפדפן, בלי שום שרת חיצוני:** `fetchStreams` (לקוח VISIONOS) → `fetchFile` בטווחים → `Mux.build` (MP4/M4A) או `toMp3` (MP3). הבקשות יוצאות רק ליוטיוב. (שרת ה-Drive ושיתוף העוגיות של גרסאות קודמות הוסרו לגמרי.)
+3. **השתלטות על כפתור ההורדה הרשמי** של יוטיוב: לחיצה עליו (וגם על "הורדה" בתפריט שלוש הנקודות, ביוטיוב מיוזיק ובמובייל) פותחת את דיאלוג ההורדה שלנו במקום ההצעה לקנות Premium.
+
+## מבנה ובנייה
+
+- הקוד ב-`src/`. `python build.py` בונה `extension/` (לא לערוך ידנית), `userscript/youtube-premium.user.js`, `dist/youtube-premium-extension.zip`.
+- החבילה שרצה בדף = שרשור ל-IIFE אחד, **scope משותף**: `settings.js`, `platform-*.js`, ואז `BUNDLE` ב-build.py. אין `import`/`export`; שמות גלובליים בתוך ה-IIFE הם הממשק.
+- בתוסף: `main.js` רץ ב-MAIN world מ-document_start, `bridge.js` בעולם המבודד. אין service worker.
+- manifest: הרשאות `storage` בלבד, host `*://*.youtube.com/*` בלבד (גם כדי שחלון התוסף יקבל `tab.url` של לשונית יוטיוב בלי הרשאת `tabs`).
+- טמפרמונקי: `@grant none`, רץ בדף.
+- יוטיוב אוכף Trusted Types: **אסור innerHTML** – רק `h()` / createElement.
+- כלי ה-Write/Edit הופכים escape של תווי בקרה בקוד לתו אמיתי – לא לכתוב escape כזה.
+- ממשק בעברית RTL, הודעות שגיאה ידידותיות.
+
+## בעלות על קבצים
+
+| רכיב | קבצים |
+|---|---|
+| B. הורדה בדף + כפתור רשמי | `src/features/download.js`, `src/features/official-button.js`, `src/mux.js`, `src/mp3.js`, `src/vendor/lame.min.js` |
+| C. הגדרות, popup, גשר | `src/settings.js`, `src/features/panel.js`, `src/features/main.js`, `src/popup.html`, `src/popup.js`, `src/bridge.js`, `src/platform-extension.js`, `src/platform-userscript.js`, `src/manifest.json`, `build.py` |
+| D. פיצ'רי פרימיום | `src/features/ads.js`, `background-play.js`, `pip.js`, `quality.js`, `speed.js`, `util.js` (רק תוספות, בלי לשבור חתימות) |
+
+## ממשקים בתוך החבילה שבדף
+
+### util.js (קיים)
+`S` (אובייקט ההגדרות החי), `h(tag, props, ...kids)`, `svg(path, size)`, `ICONS`, `sleep`, `onReady`, `videoId()`, `player()`, `video()`, `toast(text)`, `safeName(title)`, `mb(bytes)`, `fill(el, ...kids)`.
+
+### settings.js – C
+```js
+SETTINGS = [{ key, type: 'bool'|'select', def, label, desc, labelEn?, descEn?, group, options?: [{value, label, labelEn?}] }]
+DEFAULTS = { key: def }
+SETTING_GROUPS = [{ id, label, labelEn }]   // ads | watch | download
+migrateSettings(settings)                   // ערכים ישנים (downloadQuality high/medium/low)
+```
+מפתחות ההורדה: `download`, `downloadQuality` (`ask|1080|720|360|144|audio`), `hookOfficialButton`.
+
+### panel.js – C
+- `ui()`, `shadow`, `ytDialog(...)`, `ytToast(...)`, דיאלוג הגדרות לטמפרמונקי (`openSettingsDialog`, `ensureSettingsEntry`, `renderSettings(container)`).
+- CSS משותף ב-`PANEL_CSS`; רכיב B מוסיף CSS משלו דרך `DOWNLOAD_CSS` (מוגדר ב-download.js ו-panel.js מצרף אותו אם קיים: `typeof DOWNLOAD_CSS !== 'undefined'`).
+
+### main.js – C
+`applySettings()`, `update(patch)`, חיבור `Platform.onChange` / `onCommand`, לולאת tick כל 500ms, ו-`keepAwake` כל דקה. פקודה: `'download'`.
+
+### download.js – B
+- `openDownloadDialog(anchor, id)` → דיאלוג "איכות ההורדה" עם כל האיכויות מ-`fetchStreams` + שמע (M4A) + שמע (MP3).
+- `runDownload` → `browserDownload`: הורדה בדפדפן בלבד; בכישלון – "ההורדה נכשלה" והכפתור עובר ל"ניסיון חוזר". אין זיכרון → `dlLowerChoice`; 403 → הקישורים נמחקים מהמטמון לניסיון הבא.
+- `isDownloadBusy()`, תור הורדות, טבעת התקדמות על הכפתור הרשמי, דף "הורדות", `beforeunload` בזמן הורדה.
+
+### official-button.js – B
+- `hookOfficialButtons()` – נקרא מה-tick. מאזין click אחד ב-capture על document (נרשם פעם אחת). אם `S.download && S.hookOfficialButton` ולחיצה בתוך אחד מ:
+  `ytd-download-button-renderer`, `ytd-menu-service-item-download-renderer`, פריט "הורדה"/"Download" בתפריט (`tp-yt-iron-dropdown` / `yt-list-item-view-model` / `ytd-menu-service-item-renderer` עם אייקון/טקסט הורדה), `ytm-...` במובייל, `ytmusic-menu-service-item-download-renderer`
+  → `preventDefault` + `stopImmediatePropagation`, סוגר את תפריט יוטיוב אם פתוח, ופותח את דיאלוג ההורדה.
+- במבנה הנוכחי (נבדק ב-16/09/2026, לא מחובר): `ytd-watch-metadata #actions ytd-menu-renderer #flexible-item-buttons > ytd-download-button-renderer`, טקסט "הורדה".
+
+## Platform – ממשק שכל פלטפורמה מממשת (C)
+
+```js
+Platform.kind                     // 'extension' | 'userscript'
+Platform.load() / save(s) / onChange(cb) / onCommand(cb)
+```
+- **תוסף**: `save` שולח `ytu:save` (JSON) → `bridge.js` שומר ב-`chrome.storage.local.settings` רק מפתחות מוכרים. שינויים חוזרים לדף ב-`ytu:settings`. חלון התוסף שולח `{ ytu: 'download' }` ללשונית → bridge → `ytu:command`.
+- **טמפרמונקי**: localStorage `ytu-settings`, ועדכונים מלשוניות אחרות באירוע `storage`.
+
+## בדיקות
+- `test/index.html` + שרת CORS מקומי מדמה את נגן יוטיוב (fetch מוחלף). נטפרי חוסם את ה-player API של יוטיוב ואת הזרקת קוד לדף יוטיוב אמיתי, אז בודקים שם. בזמן הורדה לא אמורה לצאת שום בקשה מחוץ לשרת המקומי.
+- `node test/download.test.js`, `node test/prune.test.js`; `test/popup.html` – דמה לחלון התוסף.
+
+---
+
+# v2.1 – חוויה מקורית של YouTube Premium (דרישת המשתמש, 16/09/2026)
+
+"שזה ירגיש כמו יוטיוב פרימיום אורגינל": **אין ממשק משלנו בתוך יוטיוב** – אין כפתור ✦ בנגן, אין כפתור צף, אין חלונית הגדרות בדף, אין קיצורי מקלדת משלנו (Shift+>/< וכו'). כל פיצ'ר מופיע רק במקום שבו יוטיוב מציג אותו למנויי Premium, בעיצוב של יוטיוב.
+
+| פיצ'ר | איפה |
+|---|---|
+| בלי פרסומות / בלי חלונות Premium | שקוף |
+| ניגון ברקע | שקוף |
+| מהירות | תפריט ⚙ → "מהירות הפעלה" המקורי (ראו למטה) |
+| איכות מרבית | שקוף + תפריט ⚙ → "איכות" המקורי |
+| חלון צף | אוטומטי כשיוצאים מהלשונית (mediaSession) – כמו Premium במובייל; בלי כפתור |
+| הורדה | רק כפתור "הורדה" הרשמי / "הורדה" בתפריט ⋮ / יוטיוב מיוזיק / מובייל → **דיאלוג בעיצוב של יוטיוב** כמו דיאלוג "איכות ההורדה" של Premium: רשימת רדיו (גבוהה 1080p / בינונית 720p / נמוכה 360p / שמע בלבד, עם גדלים), כפתור "הורדה", ואחרי זה התקדמות בסגנון יוטיוב (טוסט/snackbar של יוטיוב או הדיאלוג עצמו). ההורדה כולה בדפדפן |
+| הגדרות | **רק בחלון התוסף** (popup). בטמפרמונקי: פקודות GM_registerMenuCommand אינן זמינות ב-@grant none – לכן פריט אחד "הגדרות YouTube Premium" בתפריט האווטאר/⚙ של יוטיוב שפותח דיאלוג בעיצוב יוטיוב, או דיאלוג דרך תפריט טמפרמונקי אם עוברים ל-@grant GM_registerMenuCommand עם @sandbox raw – להחליט לפי מה שעובד |
+| קרדיט | בחלון התוסף ובדיאלוג ההגדרות: "נוצר ע"י צול גאה · TSOOLGEE.UK" (קישור https://tsoolgee.uk) |
+| שם | "יוטיוב פרימיום" (manifest name/short_name/popup title/userscript @name), author: צול גאה – TSOOLGEE.UK |
+
+## מבנה תפריט המהירות האמיתי (נבדק ב-16/09/2026 בחשבון לא מחובר, עברית)
+```
+.ytp-settings-menu .ytp-panel
+  .ytp-panel-header (.ytp-panel-back-button, .ytp-panel-title "מהירות הפעלה")
+  .ytp-variable-speed-panel-content
+    .ytp-speed-display-container > .ytp-variable-speed-panel-display
+        .ytp-variable-speed-panel-premium-badge > .ytp-variable-speed-panel-badge   (display:block)
+        span "1.00x"
+    .ytp-variable-speed-panel-slider-container
+        button.ytp-variable-speed-panel-increment-button "-"
+        .ytp-input-slider-section
+            .ytp-speedslider-indicator-container (.ytp-speedslider-badge, p.ytp-speedslider-text "1.00x")
+            input.ytp-varispeed-input-slider type=range min=0.25 max=2 step=0.05 aria-valuemax=2
+        button.ytp-variable-speed-panel-increment-button "+"
+    .ytp-variable-speed-panel-chips
+        .ytp-variable-speed-panel-preset-button-wrapper > button.ytp-variable-speed-panel-preset-button > span "1.0" (+ label "רגילה")
+        ... "1.25" "1.5" "1.75" "2.0" "3.0"   ← 3.0 הוא הצ'יפ של Premium
+```
+`movie_player.getAvailablePlaybackRates()` → `[0.25 … 2]`. תפריט ⚙ ראשי: פריטים `.ytp-menuitem` עם `.ytp-menuitem-label` ("מהירות הפעלה", "איכות", …) ו-`.ytp-menuitem-content`.
+המטרה: הסליידר עד 4 (max/aria-valuemax), הצ'יפ 3.0 עובד (ולא מציג הצעת Premium), + ו-− עוברים את 2, התצוגה "3.00x" מתעדכנת, ההגדרה נשמרת בין סרטונים כמו ביוטיוב, ו-`getAvailablePlaybackRates` כולל עד 4. **נבדק ביוטיוב האמיתי:** הקיצורים המקוריים Shift+>/< לא קוראים ל-API הציבורי של הנגן ונעצרים ב-2, לכן speed.js ממשיך אותם מעל 2 (אותו קיצור של יוטיוב, צעדים 2.25…4, עם הבזל `.ytp-bezel` של יוטיוב).
+
+## v2.1 – ממשקים בפועל (אינטגרציה)
+- speed.js: `handleSpeed()` (tick) – עוטף `getAvailablePlaybackRates/setPlaybackRate/getPlaybackRate` של הנגן, מרחיב את הסליידר ל-4, מיירט צ'יפ 3.0 / + / − / חצים מעל 2, `syncSpeedUi()` מעדכן "3.00x" ואת "מהירות הפעלה" בתפריט הראשי. נשמר ב-localStorage `ytu-speed`. Shift+>/< של יוטיוב מעל 2 ממומשים ב-speed.js (יוטיוב עצמו עוצר ב-2). `applySpeedSetting()` (מ-applySettings) מחזיר למהירות של יוטיוב כשהפיצ'ר כבוי. אין קיצורים משלנו. לא נבדק ביוטיוב האמיתי: התנהגות מהירות שמורה מעל 2 סביב פרסומות.
+- panel.js (טמפרמונקי): כניסה להגדרות גם ב-m.youtube (גיליון ⋮, `ytm-menu-item` אחרי "הגדרות") וב-Music (`ytmusic-popup-container ytd-multi-page-menu-renderer`, לא נבדק – נטפרי חוסם את music).
+- download.js: `openDownloadDialog(anchor, id)`, `closeDownloadDialog()`, `isDownloadViewOpen(id)`, `isDownloadBusy()`, `refreshDownloadButtons()` (tick – טבעת התקדמות על הכפתור הרשמי), `dlSnack(text, action?)`. `S.downloadQuality` (`ask|high|medium|low|audio`).
+- panel.js: רק `ui/shadow`, `ytDialog`, דיאלוג הגדרות לטמפרמונקי (`openSettingsDialog`, `ensureSettingsEntry`). אין `togglePanel/renderMain/ensureButtons`.
+
+---
+
+## בדיקה על יוטיוב האמיתי (חדש, 16/09/2026) – להשתמש בזה!
+
+למשתמש יש פרוקסי מקומי `http://127.0.0.1:10809` שנטפרי לא מסנן (בדוק: יוטיוב מחזיר 200). בעזרתו:
+
+```bash
+cd C:/Users/USER/Documents/CLAOD/yt-unlocked && python build.py && PYTHONIOENCODING=utf-8 python test/real/harness.py [videoId] [--dark] [--lang en] [--skip-download]
+```
+
+- מריץ **Microsoft Edge** (Chrome הרשמי מתעלם מ-`--load-extension`; ה-Chromium של Playwright לא עולה במחשב הזה) עם `extension/` טעון, headless, דרך הפרוקסי, על youtube.com האמיתי.
+- shadow roots נפתחים בבדיקה (init script) כדי שאפשר ללחוץ בתוך הדיאלוג.
+- פלט: `test/real/out/*.png` (לקרוא אותם עם Read כדי לראות!) ו-`report.json`.
+- תוצאה ראשונה (2.1.0, Rick Astley dQw4w9WgXcQ): 0 שניות פרסומת, ניגון ברקע תקין, סליידר מהירות max=4, צ'יפ 3.0 → rate 3 ותצוגה "3.00x" בלי upsell, דיאלוג "איכות ההורדה" (1080p 80MB / 720p 29MB / 360p 11MB / שמע 3.3MB) נראה מקורי, הורדת שמע אמיתית → M4A תקין 213 שניות.
+- אפשר להרחיב את `harness.py` לתרחישים נוספים (שורטס, m.youtube עם viewport מובייל, ערכה כהה, אנגלית, הורדת וידאו 1080p ובדיקת ffprobe, Shift+> מעל 2). גם `https://m.youtube.com` ו-`music.youtube.com` נגישים דרך הפרוקסי.
+- עדיין אסור: התחברות לחשבון.
+- להגביל הורדות אמיתיות לסרטונים קצרים/אודיו כדי לא להעמיס על הפרוקסי.
+
+# v2.1.1 – תיקוני נאמנות ל-Premium (16/09/2026)
+
+- **מהירות – הדרך של Premium:** `prune()` ב-ads.js (רץ כש-`speed` או `hidePromos` או חסימה מוקדמת פעילים) קובע `playerConfig.granularVariableSpeedConfig.maximumPlaybackRate=400`, `isPremiumUpsell=false`, ומוחק `showPlaybackRateUpsellPanelCommand`. הנגן של יוטיוב מצייר בעצמו סליידר עד 4, תג Premium, Shift+> ושמירה. speed.js הוא גיבוי בלבד ולא פועל כש-`nativePremium()` (הנגן כבר מחזיר מהירויות מעל 2). בגיבוי: `PREMIUM_RATES=[2.5,3,3.5,4]`, Shift+> בצעדי 0.25, חזרה ל-2 ומטה משנה את הסרטון בעצמנו, התצוגה/הסליידר/התג `ytp-variable-speed-panel-premium-badge-visible` תמיד לפי המהירות האמיתית, הבזל מסיר `ytp-bezel-text-hide`. m.youtube: `variable-speed-controller-view-model` (סליידר `input.ytSliderShapeHostSlider` עד 4, `ytSliderShapeHostIncrementButton` – הראשון הוא −). תג Premium במובייל לא מצויר (התוכן שלו מגיע מהשרת).
+- **בלי הצעות:** `prune()` מוחק `playabilityStatus.paygatedQualitiesMetadata` ("1080p Premium") ופריטי תפריט `listItemViewModel` עם `LIST_ITEM_VIEW_MODEL_ENTITY_SELECTOR_TYPE_REMOVE_ADS_AD_STATE` או `panelId: PApremium_upsell`. CSS מסתיר `.ytp-quality-menu .ytp-menuitem:has(.ytp-premium-label)`.
+- **אזהרת חוסם פרסומות:** לא מסתירים את `ytd-enforcement-message-view-model` עצמו (יוטיוב בודק את ה-display שלו) – רק את הדיאלוג/הרקע ב-visibility, ו-MutationObserver סוגר מיד.
+- **פרסומת שלא דולגה:** מוסתרים `.video-ads`, `.ytp-ad-module`, `.ytp-ad-player-overlay-layout`, פס ההתקדמות ופקדי הנגן, והווידאו שקוף בזמן `ad-showing`.
+- **הורדה (download.js):** מחרוזות מ-`yt.msgs_` / `ytcfg MSGS` (`ytMsg`). דיאלוג `openQualityDialog` בעיצוב `ytd-download-quality-selector-renderer` (342px, רדיו 16px, גודל בצד, "הורדה" טקסט כחול מושבת עד בחירה). איכויות: `1080|720|360|144|audio` (ערכי 2.1.0 `high|medium|low` מומרים ב-`migrateSettings` ב-settings.js). טוסט התקדמות אחד (`ytToast` ב-panel.js, כמו `yt-notification-action-renderer.is-download`): "יורד..." / "הכנות אחרונות להורדה...", "יש להשאיר את החלון פתוח" (דפדפן), X, פס 4px. `beforeunload` בזמן הורדה בדפדפן. הכפתור הרשמי: אייקון טבעת/‏OFFLINE_PIN בתוך `.ytSpecButtonShapeNextIcon`, טקסט "יורד"/"הורדת", `is-download-complete`; מצב "הורדת" נשמר ב-sessionStorage `ytu-dl-done`. לחיצה בזמן הורדה/אחריה → "להסיר את ההורדה?" (`openRemoveDialog`: ביטול / הורדה חוזרת / הסרה מההורדות). סיום: "הורדת" (+ "לצפייה בסרטון" לדף ההורדות). שגיאה: "ההורדה לא זמינה" + הסבר לפי קוד בשפת הממשק (`DL_ERRORS`). אין דף "הורדות" (FEdownloads נבנה מה-entity store של יוטיוב).
+- **m.youtube:** אין כפתור הורדה – official-button.js משכפל את `button-view-model` של "שמירה בפלייליסט" לכפתור "הורדה" (`data-ytu-mweb-dl`). `ytDark()` במובייל לפי בהירות הרקע (אין html[dark]). גיליון ⋮: `max-height` גדל ב-48px.
+- **popup:** עברית/אנגלית לפי `chrome.i18n.getUILanguage()`, בהיר/כהה לפי המערכת, לוגו YouTube Premium. `test/popup.html` – דמה ל-popup.
+
+# v2.1.3 (16/09/2026)
+- **m.youtube:** הכפתור המשוכפל נכנס לסרגל רק אם יש מקום (אין גלילה בסרגל ואף כפתור לא מתכווץ). אחרת – שורת "הורדה" בגיליון "עוד" לפני "שמירה"; נבדק מחדש כשרוחב הסרגל משתנה. נבדק ביוטיוב האמיתי: 360px → בגיליון, 600px → בסרגל, scrollWidth=clientWidth בשניהם.
+- **"שמע בלבד" בדיאלוג ההורדה:** סטייה מכוונת מ-Premium (שמציג רק וידאו) – דרישת המשתמש בטבלת v2.1.
+- harness.py: `--width` למובייל.
+
+---
+
+## מנוע ההורדה (v2.2, 18/09/2026) – הועבר מפרויקט "מוריד יוטיוב"
+
+`Documents/CLAOD/yt-download` הוא גרסה עצמאית להורדה בלבד; **המנוע** שלו הועבר לכאן (הממשק שלו – כפתור צף ותפריט – לא):
+
+- `CHUNK = 4MB`, `LANES = 4`, `RETRIES = 8`. מונה הניסיונות מתאפס בכל בקשה שהביאה בייטים חדשים, כי נטפרי חותך בקשות גדולות **באקראי** ולא מעל סף קבוע. 4xx (למעט 429) = סופי, 403 מוחק את הקישורים מהמטמון.
+- `src/vendor/lame.min.js` (LGPL, נשמר כקובץ נפרד עם הרישיון) + `src/mp3.js`: `id3(title, artist)` (ID3v2.3 ב-UTF-16), `toI16`, `toMp3(parts, meta, onProgress)` – מפענח ב-WebAudio ומקודד ב-192kbps, עם `await sleep(0)` בכל בלוק כדי שהדף לא יקפא. שניהם ב-BUNDLE לפני `features/download.js`.
+- `dlChoices(info)` – כל האיכויות שיוטיוב מציע לסרטון (שם Premium לפריסטים, אחרת `1080p60`), ואחריהן `audio` (M4A) ו-`mp3`. הדיאלוג מצייר קודם את הפריסטים ומחליף לרשימה המלאה כשהפרטים מגיעים.
+- `dlLowerChoice(id, choice)` + `dlInfoNow(id)` – כשאין זיכרון (`RangeError`/`tooLarge`) ההורדה ממשיכה לבד באיכות אחת מתחת, עם טוסט.

@@ -1,0 +1,31 @@
+{
+   "action": {
+      "default_icon": {
+         "128": "icon128.png",
+         "16": "icon16.png",
+         "48": "icon48.png"
+      },
+      "default_popup": "popup.html"
+   },
+   "background": {
+      "service_worker": "background.js"
+   },
+   "content_scripts": [ {
+      "js": [ "analytics.js", "content.js" ],
+      "matches": [ "*://*.youtube.com/*" ],
+      "run_at": "document_end"
+   } ],
+   "description": "✨ Shows real-time synced lyrics on YouTube. A simple YouTube lyrics extension for music videos and songs.",
+   "host_permissions": [ "https://www.youtube.com/*", "https://lrclib.net/*", "https://api.lyrics.ovh/*", "https://*.vercel.app/*" ],
+   "icons": {
+      "128": "icon128.png",
+      "16": "icon16.png",
+      "48": "icon48.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu5ircgtYhZoT+B09GHuOisx5bUMJQWXTkJnKJ2pkmeK6ex+kVGkcN62+MHlGtG7gVh2ay8Y1q5nTNk0vKcNppLtBU4bU3uhoIlNJzo4So8Zru6O8MK/i9v7ixkDfFF5yOXL35qNznUnqUH8rQ+4MfdClZ5e1DuitXSLRGru1lVgb2LpWEvIwy6kyulcuxdX1sDon4/4fRIzELfrmSWUzgMmvWX6KaBQTR3+TxWnGhlhu4e0HH2vanoTAaYnxvyIHUzKeJaJ04ZX6O/Jlx/SjTMmi9UKBh7I69WAHb6Nv4nocgZOzVu6MZawjlbyOTaloD3X24vpHUObX7iF8LI1eSwIDAQAB",
+   "manifest_version": 3,
+   "name": "YouTube Lyrics Extension – Real-Time Synced Lyrics | YT Lyrics",
+   "permissions": [ "activeTab", "scripting", "storage" ],
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "1.0.9"
+}

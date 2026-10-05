@@ -1,0 +1,33 @@
+{
+   "action": {
+      "default_icon": "icons/lyrike-icon@128px.png"
+   },
+   "background": {
+      "service_worker": "service-worker-loader.js",
+      "type": "module"
+   },
+   "content_scripts": [ {
+      "js": [ "assets/main.tsx-loader-B-j_OIT0.js" ],
+      "matches": [ "https://music.youtube.com/*", "https://www.youtube.com/*" ],
+      "run_at": "document_idle"
+   } ],
+   "default_locale": "en",
+   "description": "__MSG_extDesc__",
+   "host_permissions": [ "https://music.youtube.com/*", "https://www.youtube.com/*", "https://lrclib.net/*", "https://i.ytimg.com/*", "https://fonts.googleapis.com/*", "https://fonts.gstatic.com/*", "https://lyrike-report-proxy.duckviet.workers.dev/*", "https://raw.githubusercontent.com/*" ],
+   "icons": {
+      "128": "icons/lyrike-icon@128px.png",
+      "16": "icons/lyrike-icon@16px.png",
+      "48": "icons/lyrike-icon@48px.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAm6oc2AgVDfcW7PpNyxnkMcAlAkgZd0F6jMhyCgI3qUXg58k55OhXUutsoluBlemXkiIz42c8fJd2uh5Y9useRUpkJVs0CrSvYVCkY2aJYgiiScSrP3ftm8A5trNKB3ZgEi7R3ESaTQ+VMFnKqP6w8zlucMCTGlm8inwvAetKdMAC1Vb3KuaD+RugHxTaSn5ozg924ei5sg6Dj7Z3oJ2C6xpug2nbn3ZqshuylssAEliXF6cX7l3tPDJNNSIs0DjHCt1RmF0WVYnjcpXnIPdSPbfhRdCHA+HUBJhZ0hRlIpsb45L1fRubiaGuJn7F8O+uXsC35MBucJ9TkJS61cJ6QQIDAQAB",
+   "manifest_version": 3,
+   "name": "__MSG_extName__",
+   "permissions": [ "storage", "unlimitedStorage" ],
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "1.2.2",
+   "web_accessible_resources": [ {
+      "matches": [ "https://music.youtube.com/*", "https://www.youtube.com/*" ],
+      "resources": [ "fonts/**/*", "assets/trackInfo-BZ04J7eI.js", "assets/main.tsx-C_VgXX4v.js" ],
+      "use_dynamic_url": false
+   } ]
+}

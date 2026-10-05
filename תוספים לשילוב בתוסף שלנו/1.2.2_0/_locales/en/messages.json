@@ -1,0 +1,10 @@
+{
+   "extDesc": {
+      "description": "The description of the extension.",
+      "message": "Display synced lyrics with Picture-in-Picture on YouTube."
+   },
+   "extName": {
+      "description": "The name of the extension.",
+      "message": "Lyrike - YouTube Lyrics"
+   }
+}

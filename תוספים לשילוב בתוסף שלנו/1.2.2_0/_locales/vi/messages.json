@@ -1,0 +1,10 @@
+{
+   "extDesc": {
+      "description": "Mô tả của tiện ích.",
+      "message": "Hiển thị lời bài hát đồng bộ với Picture-in-Picture trên YouTube."
+   },
+   "extName": {
+      "description": "Tên của tiện ích.",
+      "message": "Lyrike - YouTube Lyrics"
+   }
+}

@@ -1,0 +1,30 @@
+{
+   "background": {
+      "service_worker": "background.js"
+   },
+   "content_scripts": [ {
+      "css": [ "global.css", "content.css" ],
+      "js": [ "content.js" ],
+      "matches": [ "https://*.youtube.com/*" ],
+      "run_at": "document_start"
+   } ],
+   "description": "Get lyrics for any music video on YouTube.",
+   "host_permissions": [ "https://*.youtube.com/", "https://open.spotify.com/get_access_token", "https://spclient.wg.spotify.com/", "https://api-partner.spotify.com/" ],
+   "icons": {
+      "128": "img/icon_128.png",
+      "16": "img/icon_16.png",
+      "32": "img/icon_32.png",
+      "48": "img/icon_48.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsWpbtCCYQSLDrroZGxL4TuXWNlEMu8lYJQByLJXP401qbC4DG7gXZo/TpL0+f0zjQa6iBf29ASqTXQ2ytVWsvmy394WCnJS2lhxzamo8rJGDEOoBXEt3NvQEQThXIfxrwbnc25qJ3LIoro4sfbl15WtkzggZVvch6hNoL4AA9/IUEV0GQiEssuV9Us+cV3w50nGs4DJ9x5EXtGE1sPsME4Fb/BlqgHrCh5CSj9SHv45rsF6Bfm9ByFvTCjTHuVv+Lvt+fhsSsRtscSxJEIWn9aadVbbStqSjCIM7nkyS0+UuOEml+iiM1OBqbkZ7WAyuMHYD/fISZ2ti0ctKYxucGQIDAQAB",
+   "manifest_version": 3,
+   "minimum_chrome_version": "93",
+   "name": "YouTube Lyrics",
+   "permissions": [ "storage" ],
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "0.3.3",
+   "web_accessible_resources": [ {
+      "matches": [ "https://*.youtube.com/*" ],
+      "resources": [ "fonts/*", "get-video-info.js" ]
+   } ]
+}
