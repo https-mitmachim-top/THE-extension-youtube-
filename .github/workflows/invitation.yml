@@ -6,9 +6,9 @@ on:
 jobs:
   automate_invite:
     runs-on: ubuntu-latest
+    if: contains(github.event.issue.title, 'invite') || contains(github.event.issue.title, 'הזמן')
     steps:
-      - name: Check Title and Send Invite
-        if: contains(lower(github.event.issue.title), 'invite') || contains(github.event.issue.title, 'הזמן') || contains(github.event.issue.title, 'להצטרף')
+      - name: Send Invite
         uses: vj-abigo/invite-on-label@v1.4
         with:
           organization: 'https-mitmachim-top'
