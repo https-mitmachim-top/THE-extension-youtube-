@@ -3,36 +3,16 @@ on:
   issues:
     types: [opened]
 
+permissions:
+  issues: write
+
 jobs:
   automate_invite:
     runs-on: ubuntu-latest
     if: contains(github.event.issue.title, 'invite') || contains(github.event.issue.title, 'הזמן')
     steps:
-      - name: Send Organization Invite
-        uses: actions/github-script@v7
+      - name: Auto Invite Member
+        uses: cloudposse/github-action-auto-invite@main
         with:
-          github-token: \${{ secrets.INVITE_TOKEN }}
-          script: |
-            const issueOwner = context.payload.issue.user.login;
-            
-            // שליחת הזמנה לארגון
-            await github.rest.orgs.createInvitation({
-              org: 'https-mitmachim-top',
-              invitee_id: context.payload.issue.user.id,
-              role: 'direct_member'
-            });
-            
-            // כתיבת תגובה וסגירת ה-Issue אוטומטית
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `ברוך הבא לארגון מתמחים טופ @${issueOwner}! ההזמנה הרשמית נשלחה לחשבון שלך. יש לאשר אותה במייל או דרך עמוד הארגון בגיטהאב.`
-            });
-            
-            await github.rest.issues.update({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              state: 'closed'
-            });
+          organization: 'https-mitmachim-top'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
